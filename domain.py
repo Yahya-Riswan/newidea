@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse
-from sqlalchemy import create_all, Column, String, Integer, create_engine
+from sqlalchemy import Column, String, Integer, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -67,30 +67,23 @@ TEMPLATES = {
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_store(request: Request, db: Session = Depends(get_db)):
-    host = request.headers.get("host", "")
-    # For local testing, if host is 'localhost:8000', we can default to a test store
-    subdomain = host.split(".")[0] if "." in host else "testuser"
+    # Render and other proxies often put the original domain in 'x-forwarded-host'
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    
+    # Logic: if host is 'pappu.zahi.co.in', subdomain is 'pappu'
+    parts = host.split('.')
+    if len(parts) > 2:
+        subdomain = parts[0]
+    else:
+        subdomain = "www" # Default/Main site
 
     store = db.query(Store).filter(Store.subdomain == subdomain).first()
     
     if not store:
-        return f"<h1>Store '{subdomain}' not found.</h1><p>Join Zahi to create one!</p>"
+        return "<h1>Welcome to Zahi.co.in</h1><p>Start your store today!</p>"
 
-    # Get the specific design based on the user's plan
     content = TEMPLATES.get(store.plan, TEMPLATES["free"]).format(name=store.name)
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{store.name}</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body>
-        {content}
-    </body>
-    </html>
-    """
+    return f"<html><head><script src='https://cdn.tailwindcss.com'></script></head><body>{content}</body></html>"
 
 # --- Admin API to create a store for testing ---
 @app.post("/create-store/")
